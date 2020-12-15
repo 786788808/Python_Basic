@@ -40,7 +40,9 @@ jieba里有个setup.py，安装就是要用到这个脚本，关键！
 显示成功啦！  
 ![](https://img2018.cnblogs.com/blog/1465325/201908/1465325-20190818134554877-1355382446.jpg)
 
-最后的最后，去导入wordcloud试试吧。
+- 最后的最后，去导入wordcloud试试吧。
 
+网速有点慢，图片显示不出来，后续再看有没错放错。  
+![](https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1608023153353&di=35d10ee8c92a831006e580d4dcb52165&imgtype=0&src=http%3A%2F%2Fbpic.588ku.com%2Felement_water_img%2F18%2F08%2F09%2Ff8cda6c0934635e77f52eb5da41328e7.jpg)
 
 
