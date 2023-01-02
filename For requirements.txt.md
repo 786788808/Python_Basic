@@ -15,6 +15,7 @@
 环境项目导入：`pip install -r requirements.txt`  
 
 还有一个命令，可以google一下他们的区别。  
-`pip freeze > requirements.txt`  
+`pip freeze > requirements.txt` or `pip freeze > E:\xxx\requirements.txt`(指定一个路劲，不指定的话就直接生成到当前路径下)  
+pipreqs 是一个第三方库，只生成当前项目中所用到的依赖包及其版本号，而pip freeze 方式会把所有包全部列出并生成（不过如果你进到了有虚拟环境，那就可以只生成当前项目de)  
 参考资料：[pipreqs](https://github.com/bndr/pipreqs)    
 
