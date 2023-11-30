@@ -1,6 +1,6 @@
-multithreading
+# multithreading
 
-`url = [  
-    f"https://www.cnblogs.com/#p{page}"  
-    for page in range(1, 50+1)  
-]`  
+    url = [
+        f"https://www.cnblogs.com/#p{page}"
+        for page in range(1, 50+1)
+          ]  
