@@ -1,6 +1,5 @@
 快捷键介绍：
-平时经常在找快捷键，于是总结一拨，记住这些能方便很多  
-![](https://timgsa.baidu.com/timg?image&quality=80&size=b9999_10000&sec=1608021977607&di=e100ffdbc25e2d2285c6fadf5f2ec978&imgtype=0&src=http%3A%2F%2Fimage.biaobaiju.com%2Fuploads%2F20190624%2F14%2F1561356377-VgnumPGEHU.jpg)
+
 1. F2：快速定位错误  运行错误的时候，可快速找到哪里错了
 2. ctrl + shift + i：快速预览源代码  
 3. ctrl + Q：快速预览查看文档  
@@ -25,7 +24,13 @@
 22. ctrl + Delete： 删到字符结束
 23. ctrl + Backspace: 删到字符开始
 24. ctrl + 鼠标移到对应函数位置 + 出现下划线 + 左击： 查看源码
-25. \# TODO: 记录当前工作进行到什么阶段，接下来在什么时间完成什么，提示自己后续的开发动作，提高开发效率。再次打开时，进入TODO选项，可以看见所以设置的TODO，选择一个TODO进行单击，可以跳到该TODO设置的位置
-
+25. a+b.pri, Enter,  -> print(a + b)
+26. ctrl+shift+N,找文件
+27. shift + F6: 鼠标定位变量或函数名后，给变量/自定义函数重命名
+28. Ctrl + Alt + L：格式化代码，自动调整代码缩进、空格、换行等
+29. Alt + shift + ↑/↓，把选中的代码整体上或下移动
+30. 统一添加代码，Alt 选中要添加的位置，然后填入要添加的代码即可
+![](https://s3.bmp.ovh/imgs/2025/04/13/cbfe8d3022d5eed2.png)
+![](https://s3.bmp.ovh/imgs/2025/04/13/e6d9e406ce64824d.png)  
 
 
