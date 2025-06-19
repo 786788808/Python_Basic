@@ -1,0 +1,145 @@
+import os
+import sys
+from datetime import datetime
+import requests
+from lxml import etree
+import logging
+import csv
+from collections import defaultdict
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(f'D:\\Coding\\Code\\pj_learn_001\\Log\\sanctionslist\\sanctions_parser_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'),
+        logging.StreamHandler()
+    ]
+)
+
+def web_crawler():
+    """
+    Function to download the OFAC sanctions list from the US Treasury website.
+    """
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+    }
+    url = 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONS_ENHANCED.XML'
+    res = requests.get(url=url, headers=headers)
+    if res.status_code == 200:
+        with open(file_path, 'wb') as f:
+            f.write(res.content)
+        print("Download successful.")
+    else:
+        print("Failed to download the sanctions list.")
+    print(res.status_code)
+
+
+def parse_xml_to_csv(xml_file, output_csv):
+    # 解析XML文档
+    tree = etree.parse(xml_file)
+    root = tree.getroot()
+
+    # 准备CSV文件
+    with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['No', 'depth', 'depth_sub', 'type', 'elementPath'])
+
+        # 初始化数据结构
+        unique_paths = set()
+        row_counter = 1
+        depth_counters = defaultdict(int)
+
+        # 获取命名空间映射
+        nsmap = root.nsmap
+
+        # 递归遍历函数
+        def traverse_node(node, depth, current_path):
+            nonlocal row_counter
+
+            # 获取元素本地名称（不带命名空间）
+            elem_name = etree.QName(node).localname
+
+            # 创建当前元素的路径
+            elem_path = f"{current_path}/{elem_name}" if current_path else elem_name
+
+            # 处理元素节点 (Tag)
+            if elem_path not in unique_paths:
+                # 更新深度子计数器
+                depth_counters[depth] += 1
+                current_depth_sub = f"{depth_counters[depth]}"
+
+                writer.writerow([row_counter, depth, current_depth_sub, "Tag", elem_path])
+                row_counter += 1
+                unique_paths.add(elem_path)
+
+                # 初始化当前元素的属性计数器
+                attr_counter = 0
+
+                # 处理所有属性节点 (Attribute)
+                # 使用items()方法获取所有属性
+                for attr_name, attr_value in node.items():
+                    # 获取属性完整名称
+                    attr_qname = etree.QName(attr_name)
+                    attr_ns = attr_qname.namespace
+                    attr_localname = attr_qname.localname
+
+                    # 构建可读属性名
+                    if attr_ns:
+                        # 查找命名空间前缀
+                        prefix = None
+                        for p, uri in nsmap.items():
+                            if uri == attr_ns:
+                                prefix = p
+                                break
+
+                        if prefix:
+                            readable_attr_name = f"{prefix}:{attr_localname}"
+                        else:
+                            readable_attr_name = f"{{{attr_ns}}}{attr_localname}"
+                    else:
+                        readable_attr_name = attr_localname
+
+                    # 创建属性路径
+                    attr_path = f"{elem_path}_{readable_attr_name}"
+
+                    if attr_path not in unique_paths:
+                        attr_counter += 1
+                        attr_depth_sub = f"{current_depth_sub}_{attr_counter}"
+
+                        writer.writerow([row_counter, depth, attr_depth_sub, "Attribute", attr_path])
+                        row_counter += 1
+                        unique_paths.add(attr_path)
+
+            # 递归处理子节点
+            for child in node.iterchildren():
+                traverse_node(child, depth + 1, elem_path)
+
+        # 从根节点开始遍历
+        traverse_node(root, 0, "")
+
+
+
+if __name__ == '__main__':
+    today = datetime.now().strftime('%Y-%m-%d')
+    # current_date = datetime.now().strftime('%Y%m%d')
+    current_date = '20250618'
+    order_date= current_date
+    file_dir = 'D:\\Coding\\Code\\pj_learn_001\\DataFile\\sanctionslist'
+    file_dir_date = f'D:\\Coding\\Code\\pj_learn_001\\DataFile\\sanctionslist\\{order_date}'
+    file_path = f'{file_dir_date}\\us_sanctions_list.xml'
+    csv_path = f'{file_dir_date}\\us_sanctions_list.csv'
+    os.makedirs(file_dir_date, exist_ok=True)
+    logging.info(f"11111111111111")
+    # web_crawler()
+    logging.info(f"222222222222222")
+    # parse_xml(file_path)
+
+    logging.info(f"333333333333333333")
+
+    parse_xml_to_csv(file_path, csv_path)
+    logging.info(f"666666666")
+
+
+
