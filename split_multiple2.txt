@@ -1,0 +1,78 @@
+import pandas as pd
+import os
+
+
+def process_suspension_data(df):
+    # 创建一个空列表存储拆分后的行
+    expanded_rows = []
+
+    for _, row in df.iterrows():
+        stock_code = str(row['Stock_code']) if pd.notna(row['Stock_code']) else ''
+        stock_name = str(row['Short_stock_name']) if pd.notna(row['Short_stock_name']) else ''
+
+        # 如果两个字段都是空值,直接添加原始行
+        if pd.isna(row['Stock_code']) and pd.isna(row['Short_stock_name']):
+            expanded_rows.append(row)
+            continue
+
+        # 情况1: 都有+++且数量相同
+        if '+++' in stock_code and '+++' in stock_name:
+            codes = [c.strip() for c in stock_code.split('+++')]
+            names = [n.strip() for n in stock_name.split('+++')]
+            
+            if len(codes) == len(names):
+                for code, name in zip(codes, names):
+                    new_row = row.copy()
+                    new_row['Stock_code'] = code
+                    new_row['Short_stock_name'] = name
+                    expanded_rows.append(new_row)
+            continue
+
+        # 情况2: 只有名称有+++（一个代码对应多个名称）
+        if '+++' not in stock_code and '+++' in stock_name:
+            names = [n.strip() for n in stock_name.split('+++')]
+            for name in names:
+                new_row = row.copy()
+                new_row['Stock_code'] = stock_code.strip()
+                new_row['Short_stock_name'] = name
+                expanded_rows.append(new_row)
+            continue
+
+        # 情况3: 只有代码有+++（多个代码对应一个名称）
+        if '+++' in stock_code and '+++' not in stock_name:
+            codes = [c.strip() for c in stock_code.split('+++')]
+            for code in codes:
+                new_row = row.copy()
+                new_row['Stock_code'] = code
+                new_row['Short_stock_name'] = stock_name.strip()
+                expanded_rows.append(new_row)
+            continue
+
+        # 情况4: 都没有+++，保持原样
+        expanded_rows.append(row)
+
+    return pd.DataFrame(expanded_rows)
+
+
+if __name__ == "__main__":
+    # 设置文件路径
+    data_dir = r"D:\Coding\Code\pj_learn_001\webs\data"
+    input_file = os.path.join(data_dir, "hkex_suspension1.xlsx")
+    output_file = os.path.join(data_dir, "hkex_suspension_processed03.csv")
+
+    # 读取Excel文件
+    df = pd.read_excel(input_file)
+
+    # 处理数据
+    result_df = process_suspension_data(df)
+
+    # 保存为CSV文件
+    result_df.to_csv(output_file, index=False)
+
+    # 显示处理前后的行数对比
+    print(f"原始数据行数: {len(df)}")
+    print(f"处理后数据行数: {len(result_df)}")
+
+    # 显示前几行数据看看效果
+    print("\n处理后的数据前几行:")
+    print(result_df.head())
