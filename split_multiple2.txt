@@ -57,8 +57,8 @@ def process_suspension_data(df):
 if __name__ == "__main__":
     # 设置文件路径
     data_dir = r"D:\Coding\Code\pj_learn_001\webs\data"
-    input_file = os.path.join(data_dir, "hkex_suspension1.xlsx")
-    output_file = os.path.join(data_dir, "hkex_suspension_processed03.csv")
+    input_file = os.path.join(data_dir, "aa1.xlsx")
+    output_file = os.path.join(data_dir, "aa_processed03.csv")
 
     # 读取Excel文件
     df = pd.read_excel(input_file)
