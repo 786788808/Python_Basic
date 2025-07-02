@@ -1,0 +1,55 @@
+import pandas as pd
+
+# 读取Excel文件
+# df = pd.read_excel("webs/data/hkex_suspension1.xlsx")
+df = pd.read_excel("D:\Coding\Code\pj_learn_001\webs\data\hkex_suspension1.xlsx")
+
+
+def split_multiple_stocks(df):
+    # 创建一个空列表存储拆分后的行
+    new_rows = []
+
+    for _, row in df.iterrows():
+        stock_code = str(row['Stock_code'])
+        stock_name = str(row['Short_stock_name'])
+
+        # 如果是null值,直接添加原始行
+        if stock_code.lower() == 'null' or stock_name.lower() == 'null':
+            new_rows.append(row)
+            continue
+
+        # 检查是否需要拆分
+        if '+++' in stock_code and '+++' in stock_name:
+            codes = stock_code.split('+++')
+            names = stock_name.split('+++')
+
+            # 确保code和name的数量相同
+            if len(codes) == len(names):
+                for code, name in zip(codes, names):
+                    new_row = row.copy()
+                    new_row['Stock_code'] = code.strip()
+                    new_row['Short_stock_name'] = name.strip()
+                    new_rows.append(new_row)
+        else:
+            # 不需要拆分的行直接添加
+            new_rows.append(row)
+
+    # 创建新的DataFrame
+    new_df = pd.DataFrame(new_rows)
+    return new_df
+
+
+# 处理DataFrame
+result_df = split_multiple_stocks(df)
+
+# 显示处理前后的行数对比
+print(f"原始数据行数: {len(df)}")
+print(f"处理后数据行数: {len(result_df)}")
+
+# 保存为CSV文件
+# result_df.to_csv('webs/data/hkex_suspension_processed.csv', index=False)
+result_df.to_csv('D:\Coding\Code\pj_learn_001\webs\data\hkex_suspension_processed.csv', index=False)
+
+# 显示前几行数据看看效果
+print("\n处理后的数据前几行:")
+print(result_df.head())
