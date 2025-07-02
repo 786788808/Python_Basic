@@ -1,55 +1,68 @@
 import pandas as pd
-
-# 读取Excel文件
-# df = pd.read_excel("webs/data/hkex_suspension1.xlsx")
-df = pd.read_excel("D:\Coding\Code\pj_learn_001\webs\data\hkex_suspension1.xlsx")
+import os
 
 
-def split_multiple_stocks(df):
-    # 创建一个空列表存储拆分后的行
-    new_rows = []
+def process_suspension_data(df):
+    expanded_rows = []
 
     for _, row in df.iterrows():
-        stock_code = str(row['Stock_code'])
-        stock_name = str(row['Short_stock_name'])
+        stock_code = str(row['Stock_code']) if pd.notna(row['Stock_code']) else ''
+        stock_name = str(row['Short_stock_name']) if pd.notna(row['Short_stock_name']) else ''
 
-        # 如果是null值,直接添加原始行
-        if stock_code.lower() == 'null' or stock_name.lower() == 'null':
-            new_rows.append(row)
+        # 空值直接跳过
+        if not stock_code or not stock_name or stock_code.lower() == 'null' or stock_name.lower() == 'null':
             continue
 
-        # 检查是否需要拆分
-        if '+++' in stock_code and '+++' in stock_name:
-            codes = stock_code.split('+++')
-            names = stock_name.split('+++')
+        codes = [c.strip() for c in stock_code.split('+++')]
+        names = [n.strip() for n in stock_name.split('+++')]
 
-            # 确保code和name的数量相同
-            if len(codes) == len(names):
-                for code, name in zip(codes, names):
-                    new_row = row.copy()
-                    new_row['Stock_code'] = code.strip()
-                    new_row['Short_stock_name'] = name.strip()
-                    new_rows.append(new_row)
-        else:
-            # 不需要拆分的行直接添加
-            new_rows.append(row)
+        # 一对一
+        if len(codes) == 1 and len(names) == 1:
+            expanded_rows.append(row)
+        # 多对一
+        elif len(codes) > 1 and len(names) == 1:
+            for code in codes:
+                new_row = row.copy()
+                new_row['Stock_code'] = code
+                new_row['Short_stock_name'] = stock_name
+                expanded_rows.append(new_row)
+        # 一对多
+        elif len(codes) == 1 and len(names) > 1:
+            new_row = row.copy()
+            new_row['Short_stock_name'] = names[0]
+            expanded_rows.append(new_row)
+        # 多对多
+        elif len(codes) > 1 and len(names) > 1:
+            min_len = min(len(codes), len(names))
+            for i in range(min_len):
+                new_row = row.copy()
+                new_row['Stock_code'] = codes[i]
+                new_row['Short_stock_name'] = names[i]
+                expanded_rows.append(new_row)
+        # 其他情况（理论不会出现），可忽略
 
-    # 创建新的DataFrame
-    new_df = pd.DataFrame(new_rows)
-    return new_df
+    return pd.DataFrame(expanded_rows)
 
 
-# 处理DataFrame
-result_df = split_multiple_stocks(df)
+if __name__ == "__main__":
+    # 设置文件路径
+    data_dir = r"D:\Coding\Code\pj_learn_001\webs\data"
+    input_file = os.path.join(data_dir, "aa1.xlsx")
+    output_file = os.path.join(data_dir, "aa_processed03.csv")
 
-# 显示处理前后的行数对比
-print(f"原始数据行数: {len(df)}")
-print(f"处理后数据行数: {len(result_df)}")
+    # 读取Excel文件
+    df = pd.read_excel(input_file)
 
-# 保存为CSV文件
-# result_df.to_csv('webs/data/hkex_suspension_processed.csv', index=False)
-result_df.to_csv('D:\Coding\Code\pj_learn_001\webs\data\hkex_suspension_processed.csv', index=False)
+    # 处理数据
+    result_df = process_suspension_data(df)
 
-# 显示前几行数据看看效果
-print("\n处理后的数据前几行:")
-print(result_df.head())
+    # 保存为CSV文件
+    result_df.to_csv(output_file, index=False)
+
+    # 显示处理前后的行数对比
+    print(f"原始数据行数: {len(df)}")
+    print(f"处理后数据行数: {len(result_df)}")
+
+    # 显示前几行数据看看效果
+    print("\n处理后的数据前几行:")
+    print(result_df.head())
