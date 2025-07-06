@@ -1,68 +1,39 @@
+import pytest
+from unittest.mock import Mock, patch
 import pandas as pd
-import os
+from webs_us_sanction import SanctionConfig, web_crawler, parse_file
 
 
-def process_suspension_data(df):
-    expanded_rows = []
-
-    for _, row in df.iterrows():
-        stock_code = str(row['Stock_code']) if pd.notna(row['Stock_code']) else ''
-        stock_name = str(row['Short_stock_name']) if pd.notna(row['Short_stock_name']) else ''
-
-        # 空值直接跳过
-        if not stock_code or not stock_name or stock_code.lower() == 'null' or stock_name.lower() == 'null':
-            continue
-
-        codes = [c.strip() for c in stock_code.split('+++')]
-        names = [n.strip() for n in stock_name.split('+++')]
-
-        # 一对一
-        if len(codes) == 1 and len(names) == 1:
-            expanded_rows.append(row)
-        # 多对一
-        elif len(codes) > 1 and len(names) == 1:
-            for code in codes:
-                new_row = row.copy()
-                new_row['Stock_code'] = code
-                new_row['Short_stock_name'] = stock_name
-                expanded_rows.append(new_row)
-        # 一对多
-        elif len(codes) == 1 and len(names) > 1:
-            new_row = row.copy()
-            new_row['Short_stock_name'] = names[0]
-            expanded_rows.append(new_row)
-        # 多对多
-        elif len(codes) > 1 and len(names) > 1:
-            min_len = min(len(codes), len(names))
-            for i in range(min_len):
-                new_row = row.copy()
-                new_row['Stock_code'] = codes[i]
-                new_row['Short_stock_name'] = names[i]
-                expanded_rows.append(new_row)
-        # 其他情况（理论不会出现），可忽略
-
-    return pd.DataFrame(expanded_rows)
+# 1. 配置文件测试
+def test_sanction_config():
+    config = SanctionConfig('dev', '20250704')
+    assert config.file_path.endswith('webs_us_sanction.xml')
+    assert isinstance(config.proxies, dict)
 
 
-if __name__ == "__main__":
-    # 设置文件路径
-    data_dir = r"D:\Coding\Code\pj_learn_001\webs\data"
-    input_file = os.path.join(data_dir, "aa1.xlsx")
-    output_file = os.path.join(data_dir, "aa_processed03.csv")
+# 2. 爬虫功能测试
+@patch('requests.get')
+def test_web_crawler(mock_get):
+    # Mock请求响应
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.content = open('tests/test_dags/app/mock/webs_us_sanction.xml', 'rb').read()
+    mock_get.return_value = mock_response
 
-    # 读取Excel文件
-    df = pd.read_excel(input_file)
+    config = SanctionConfig('dev', '20250704')
+    web_crawler(config)
+    assert os.path.exists(config.file_path)
 
-    # 处理数据
-    result_df = process_suspension_data(df)
 
-    # 保存为CSV文件
-    result_df.to_csv(output_file, index=False)
+# 3. 解析功能测试
+def test_parse_file():
+    config = SanctionConfig('dev', '20250704')
+    config.file_path = 'tests/test_dags/app/mock/webs_us_sanction.xml'
 
-    # 显示处理前后的行数对比
-    print(f"原始数据行数: {len(df)}")
-    print(f"处理后数据行数: {len(result_df)}")
+    parse_file(config)
 
-    # 显示前几行数据看看效果
-    print("\n处理后的数据前几行:")
-    print(result_df.head())
+    # 验证CSV文件生成和内容
+    df = pd.read_csv(config.csv_path)
+    assert 'EntityName' in df.columns
+    assert 'SanctionProgram' in df.columns
+    assert len(df) > 0
