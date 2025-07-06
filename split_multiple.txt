@@ -1,1 +1,35 @@
 
+@patch('builtins.open')
+@patch('requests.get')
+def test_web_crawler(mock_get, mock_open):
+    # Mock env.json 读取
+    mock_env_file = Mock()
+    mock_env_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
+    
+    # Mock XML 文件读取
+    mock_xml_file = Mock()
+    with open('tests/test_dags/app/mock_data/WebS_US_Sanction.xml', 'rb') as f:
+        mock_xml_file.read.return_value = f.read()
+    
+    # 配置 mock_open 以处理不同的文件
+    def open_side_effect(*args, **kwargs):
+        if args[0].endswith('env.json'):
+            return Mock(__enter__=Mock(return_value=mock_env_file))
+        elif args[0].endswith('WebS_US_Sanction.json'):
+            return Mock(__enter__=Mock(return_value=mock_env_file))  # 用同样的配置
+        elif args[0].endswith('.xml'):
+            return Mock(__enter__=Mock(return_value=mock_xml_file))
+        else:  # 日志文件等
+            return mock_open.return_value
+    
+    mock_open.side_effect = open_side_effect
+    
+    # Mock请求响应
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.content = mock_xml_file.read.return_value
+    mock_get.return_value = mock_response
+    
+    config = SanctionConfig('dev', '20250704')
+    web_crawler(config)
+    assert os.path.exists(config.file_path)
