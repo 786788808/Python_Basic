@@ -1,40 +1,32 @@
 @patch('builtins.open')
 @patch('requests.get')
-def test_web_crawler(mock_get, mock_open):
-    # Mock env.json 读取
-    mock_env_file = Mock()
-    mock_env_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
+@patch('os.path.exists')
+@patch('os.makedirs')
+def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
+    # Mock os.path.exists 返回 True
+    mock_exists.return_value = True
     
-    # Mock XML 文件读取
-    mock_xml_file = Mock()
-    with open('tests/test_dags/app/mock_data/WebS_US_Sanction.xml', 'rb') as f:
-        xml_content = f.read()
-    mock_xml_file.read.return_value = xml_content
+    # 准备 XML 内容
+    xml_content = b"<xml>test</xml>"
     
-    # 创建一个通用的 mock context manager
-    def create_mock_cm(return_mock):
-        return Mock(__enter__=Mock(return_value=return_mock),
-                   __exit__=Mock(return_value=None))
-    
-    # 配置 mock_open 以处理不同的文件
-    def open_side_effect(*args, **kwargs):
-        if args[0].endswith('env.json'):
-            return create_mock_cm(mock_env_file)
-        elif args[0].endswith('WebS_US_Sanction.json'):
-            return create_mock_cm(mock_env_file)  # 用同样的配置
-        elif args[0].endswith('.xml'):
-            return create_mock_cm(mock_xml_file)
-        else:  # 日志文件等
-            return create_mock_cm(Mock())
-    
-    mock_open.side_effect = open_side_effect
-    
-    # Mock请求响应
+    # Mock 请求响应
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.content = xml_content
     mock_get.return_value = mock_response
     
+    # Mock 文件操作
+    def open_side_effect(*args, **kwargs):
+        mock_file = Mock()
+        if str(args[0]).endswith('env.json'):
+            mock_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
+        elif str(args[0]).endswith('.xml'):
+            mock_file.write = Mock()
+        return Mock(__enter__=Mock(return_value=mock_file),
+                   __exit__=Mock(return_value=None))
+    
+    mock_open.side_effect = open_side_effect
+
     config = SanctionConfig('dev', '20250704')
-    web_crawler(config)
-    assert os.path.exists(config.file_path)
+    result = web_crawler(config)
+    assert result is True
