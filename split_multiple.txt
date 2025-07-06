@@ -1,1 +1,81 @@
 
+import pytest
+from unittest.mock import Mock, patch
+import pandas as pd
+import json
+import os
+from Webs_US_Sanction import SanctionConfig, web_crawler, parse_file
+
+
+# Mock env.json 内容
+MOCK_ENV_CONFIG = {
+    "base_dir": os.path.dirname(os.path.dirname(os.path.abspath(__file__))),  # 获取测试文件的上级目录作为 base_dir
+    "proxies": {
+        "http": "",
+        "https": ""
+    }
+}
+
+
+# 1. 配置文件测试
+@patch('builtins.open')
+def test_sanction_config(mock_open):
+    # 模拟文件读取
+    mock_file = Mock()
+    mock_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
+    mock_open.return_value.__enter__.return_value = mock_file
+
+    config = SanctionConfig('dev', '20250704')
+    assert config.file_path.endswith('us_sanctions_list.xml')
+    assert isinstance(config.proxies, dict)
+
+
+# 2. 爬虫功能测试
+@patch('builtins.open')
+@patch('requests.get')
+def test_web_crawler(mock_get, mock_open):
+    # Mock env.json 读取
+    mock_env_file = Mock()
+    mock_env_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
+    
+    # Mock XML 文件读取
+    mock_xml_file = Mock()
+    mock_xml_file.read.return_value = open('tests/test_dags/app/mock_data/Webs_US_Sanction.xml', 'rb').read()
+    
+    # 配置 mock_open 以处理不同的文件
+    def open_side_effect(*args, **kwargs):
+        if args[0].endswith('env.json'):
+            return Mock(__enter__=Mock(return_value=mock_env_file))
+        return Mock(__enter__=Mock(return_value=mock_xml_file))
+    
+    mock_open.side_effect = open_side_effect
+
+    # Mock请求响应
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.content = mock_xml_file.read.return_value
+    mock_get.return_value = mock_response
+
+    config = SanctionConfig('dev', '20250704')
+    web_crawler(config)
+    assert os.path.exists(config.file_path)
+
+
+# 3. 解析功能测试
+@patch('builtins.open')
+def test_parse_file(mock_open):
+    # Mock env.json 读取
+    mock_env_file = Mock()
+    mock_env_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
+    mock_open.return_value.__enter__.return_value = mock_env_file
+
+    config = SanctionConfig('dev', '20250704')
+    config.file_path = 'tests/test_dags/app/mock_data/Webs_US_Sanction.xml'
+
+    parse_file(config)
+
+    # 验证CSV文件生成和内容
+    df = pd.read_csv(config.csv_path)
+    assert 'EntityName' in df.columns
+    assert 'SanctionProgram' in df.columns
+    assert len(df) > 0
