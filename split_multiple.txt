@@ -16,14 +16,28 @@ def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
     mock_get.return_value = mock_response
     
     # Mock 文件操作
+    mock_files = {
+        'env.json': json.dumps(MOCK_ENV_CONFIG),  # 直接返回 JSON 字符串
+        'xml': Mock()  # XML 文件仍然需要 Mock 来支持 write
+    }
+    
+    class MockOpen:
+        def __init__(self, read_data):
+            self.read_data = read_data
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return None
+        def read(self):
+            return self.read_data
+        def write(self, data):
+            pass
+    
     def open_side_effect(*args, **kwargs):
-        mock_file = Mock()
         if str(args[0]).endswith('env.json'):
-            mock_file.read.return_value = json.dumps(MOCK_ENV_CONFIG)
-        elif str(args[0]).endswith('.xml'):
-            mock_file.write = Mock()
-        return Mock(__enter__=Mock(return_value=mock_file),
-                   __exit__=Mock(return_value=None))
+            return MockOpen(mock_files['env.json'])
+        else:
+            return MockOpen("")
     
     mock_open.side_effect = open_side_effect
 
