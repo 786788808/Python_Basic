@@ -1,26 +1,24 @@
-# 获取当前测试文件所在目录
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# 拼出 xml 文件的绝对路径
-xml_path = os.path.join(current_dir, 'app', 'mock_data', 'Webs_US_Sanction.xml')
-
 import os
 import pandas as pd
 from Webs_US_Sanction import parse_file
 
-class DummyConfig:
-    def __init__(self, xml_path, csv_path):
+class TestConfig:
+    def __init__(self, xml_path, csv_path, file_date='20250704', order_date='20250704', gcp_env='dev'):
         self.file_path = xml_path
         self.csv_path = csv_path
+        self.file_date = file_date
+        self.order_date = order_date
+        self.gcp_env = gcp_env
 
-def test_parse_file_with_real_sample():
+def test_parse_file_with_sample():
     # 获取当前测试文件目录
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # 拼接 xml 路径
-    xml_path = os.path.join(current_dir, 'app', 'mock_data', 'Webs_US_Sanction.xml')
+    # 拼接 xml 路径（和你文件夹结构一致）
+    xml_path = os.path.join(current_dir, 'mock_data', 'Webs_US_Sanction.xml')
     # 生成一个临时 csv 路径
-    csv_path = os.path.join(current_dir, 'app', 'mock_data', 'Webs_US_Sanction_test_output.csv')
+    csv_path = os.path.join(current_dir, 'mock_data', 'Webs_US_Sanction_test_output.csv')
 
-    config = DummyConfig(xml_path, csv_path)
+    config = TestConfig(xml_path, csv_path)
     parse_file(config)
 
     # 检查 csv 是否生成
