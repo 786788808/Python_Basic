@@ -1,8 +1,41 @@
-def test_identifier_format():
-    assert identifier_format('00001HK', 'Ticker') == '1.HK'
-    assert identifier_format('12345HK', 'Ticker') == '12345.HK'
-    assert identifier_format('00001US', 'Ticker') == '00001.US'
-    assert identifier_format('12345CN', 'Ticker') == '12345.CN'
-    assert identifier_format('', 'Ticker') == ''
-    assert identifier_format('HK', 'Ticker') == 'HK'
-    assert identifier_format('foobar', 'ISIN') == 'foobar'
+import pytest
+from unittest.mock import patch, mock_open, Mock
+
+from Webs_US_Sanction import web_crawler
+
+class DummyConfig:
+    def __init__(self):
+        self.file_path = 'dummy.xml'
+        self.proxies = {}
+        self.headers = {}
+        self.xml_url = 'http://fake-url.com/file.xml'
+
+@patch('builtins.open', new_callable=mock_open)
+@patch('requests.get')
+def test_web_crawler(mock_requests_get, mock_file_open):
+    # 1. mock requests.get
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.content = b"<xml>fake content</xml>"
+    mock_requests_get.return_value = mock_response
+
+    # 2. mock open（mock_open 已自动支持 context manager 和 write）
+    # 3. 构造 config
+    config = DummyConfig()
+
+    # 4. 调用函数
+    web_crawler(config)
+
+    # 5. 断言 requests.get 被正确调用
+    mock_requests_get.assert_called_once_with(
+        config.xml_url,
+        proxies=config.proxies,
+        headers=config.headers,
+        verify=False,
+        timeout=180
+    )
+
+    # 6. 断言 open 被正确调用，并且 write 被调用
+    mock_file_open.assert_called_once_with(config.file_path, 'wb')
+    handle = mock_file_open()
+    handle.write.assert_called_once_with(b"<xml>fake content</xml>")
