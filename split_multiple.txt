@@ -1,42 +1,28 @@
-from unittest.mock import patch, mock_open, Mock
-import json
-import os
+import pytest
 
-# 假设 MOCK_ENV_CONFIG 已经在你的文件顶部定义好
+from Webs_US_Sanction import identifier_format
 
-@patch('builtins.open')
-@patch('requests.get')
-@patch('os.path.exists')
-@patch('os.makedirs')
-def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open_builtin):
-    # 1. mock os.path.exists 返回 True
-    mock_exists.return_value = True
+def test_identifier_format_ticker_hk():
+    # 测试 Ticker 且 region 为 HK，前面有0
+    assert identifier_format('00001HK', 'Ticker') == '1.HK'
+    assert identifier_format('01234HK', 'Ticker') == '1234.HK'
+    # 测试 Ticker 且 region 为 HK，前面无0
+    assert identifier_format('12345HK', 'Ticker') == '12345.HK'
 
-    # 2. mock requests.get
-    mock_response = Mock()
-    mock_response.status_code = 200
-    mock_response.content = b"<xml>test</xml>"
-    mock_get.return_value = mock_response
+def test_identifier_format_ticker_not_hk():
+    # 测试 Ticker 且 region 不是HK
+    assert identifier_format('00001US', 'Ticker') == '00001.US'
+    assert identifier_format('12345CN', 'Ticker') == '12345.CN'
 
-    # 3. mock open 针对 env.json 和 xml 文件
-    def open_side_effect(file, mode='r', *args, **kwargs):
-        # 针对 env.json 返回 JSON 字符串
-        print("open file:", file)  # 这里可以看到每次 open 的文件名
-        if 'env.json' in str(file):
-            m = mock_open(read_data=json.dumps(MOCK_ENV_CONFIG))
-            return m()
-        # 针对 xml 文件，模拟写入
-        elif str(file).endswith('.xml'):
-            m = mock_open()
-            return m()
-        # 其他文件，返回空内容
-        else:
-            m = mock_open(read_data='')
-            return m()
-    mock_open_builtin.side_effect = open_side_effect
+def test_identifier_format_other_type():
+    # 测试 identifier_type 不是 Ticker
+    assert identifier_format('foobar', 'ISIN') == 'foobar'
+    assert identifier_format('00001HK', 'ISIN') == '00001HK'
 
-    # 4. 执行测试
-    from Webs_US_Sanction import SanctionConfig, web_crawler
-    config = SanctionConfig('dev', '20250704')
-    result = web_crawler(config.file_path)
-    assert result is True
+def test_identifier_format_edge_cases():
+    # 空字符串
+    assert identifier_format('', 'Ticker') == '.'
+    # 长度不足2
+    assert identifier_format('A', 'Ticker') == '.A'
+    # 只有region
+    assert identifier_format('HK', 'Ticker') == '.HK'
