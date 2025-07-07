@@ -1,41 +1,41 @@
+from unittest.mock import patch, mock_open, Mock
+import json
+import os
+
+# 假设 MOCK_ENV_CONFIG 已经在你的文件顶部定义好
+
 @patch('builtins.open')
 @patch('requests.get')
 @patch('os.path.exists')
 @patch('os.makedirs')
-def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
-    # Mock os.path.exists 返回 True
+def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open_builtin):
+    # 1. mock os.path.exists 返回 True
     mock_exists.return_value = True
-    
-    # Mock 请求响应
+
+    # 2. mock requests.get
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.content = b"<xml>test</xml>"
     mock_get.return_value = mock_response
-    
-    # 处理文件读写
-    read_data_mapping = {
-        'env.json': json.dumps(MOCK_ENV_CONFIG),
-        'xml': ''
-    }
-    
-    def fake_open(*args, **kwargs):
-        filepath = str(args[0])
-        mode = kwargs.get('mode', 'r')
-        
-        m = mock_open()
-        handle = m.return_value
-        
-        if 'env.json' in filepath:
-            if 'b' in mode:
-                handle.read.return_value = read_data_mapping['env.json'].encode('utf-8')
-            else:
-                handle.read.return_value = read_data_mapping['env.json']
-        else:
-            handle.read.return_value = read_data_mapping['xml']
-            
-        return handle
-    
-    mock_open.side_effect = fake_open
 
+    # 3. mock open 针对 env.json 和 xml 文件
+    def open_side_effect(file, mode='r', *args, **kwargs):
+        # 针对 env.json 返回 JSON 字符串
+        if 'env.json' in str(file):
+            m = mock_open(read_data=json.dumps(MOCK_ENV_CONFIG))
+            return m()
+        # 针对 xml 文件，模拟写入
+        elif str(file).endswith('.xml'):
+            m = mock_open()
+            return m()
+        # 其他文件，返回空内容
+        else:
+            m = mock_open(read_data='')
+            return m()
+    mock_open_builtin.side_effect = open_side_effect
+
+    # 4. 执行测试
+    from Webs_US_Sanction import SanctionConfig, web_crawler
     config = SanctionConfig('dev', '20250704')
-    result
+    result = web_crawler(config.file_path)
+    assert result is True
