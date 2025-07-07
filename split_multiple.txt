@@ -21,6 +21,7 @@ def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open_builtin):
     # 3. mock open 针对 env.json 和 xml 文件
     def open_side_effect(file, mode='r', *args, **kwargs):
         # 针对 env.json 返回 JSON 字符串
+        print("open file:", file)  # 这里可以看到每次 open 的文件名
         if 'env.json' in str(file):
             m = mock_open(read_data=json.dumps(MOCK_ENV_CONFIG))
             return m()
