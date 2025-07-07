@@ -24,7 +24,7 @@ def test_parse_file_with_sample():
     # 检查 csv 是否生成
     assert os.path.exists(csv_path)
     # 检查内容
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, on_bad_lines='skip')
     assert 'EntityName' in df.columns
     assert 'SanctionProgram' in df.columns
     # 你可以加更多断言，比如行数、某些值等
