@@ -1,28 +1,31 @@
 import pytest
-
 from Webs_US_Sanction import identifier_format
 
-def test_identifier_format_ticker_hk():
-    # 测试 Ticker 且 region 为 HK，前面有0
+def test_ticker_hk_with_leading_zeros():
+    # 00001HK -> 1.HK
     assert identifier_format('00001HK', 'Ticker') == '1.HK'
-    assert identifier_format('01234HK', 'Ticker') == '1234.HK'
-    # 测试 Ticker 且 region 为 HK，前面无0
+
+def test_ticker_hk_without_leading_zeros():
+    # 12345HK -> 12345.HK
     assert identifier_format('12345HK', 'Ticker') == '12345.HK'
 
-def test_identifier_format_ticker_not_hk():
-    # 测试 Ticker 且 region 不是HK
+def test_ticker_not_hk():
+    # 00001US -> 00001.US
     assert identifier_format('00001US', 'Ticker') == '00001.US'
+    # 12345CN -> 12345.CN
     assert identifier_format('12345CN', 'Ticker') == '12345.CN'
 
-def test_identifier_format_other_type():
-    # 测试 identifier_type 不是 Ticker
-    assert identifier_format('foobar', 'ISIN') == 'foobar'
+def test_not_ticker_type():
+    # 不是Ticker类型，直接返回原值
     assert identifier_format('00001HK', 'ISIN') == '00001HK'
+    assert identifier_format('foobar', 'CUSIP') == 'foobar'
 
-def test_identifier_format_edge_cases():
+def test_edge_cases():
     # 空字符串
     assert identifier_format('', 'Ticker') == '.'
-    # 长度不足2
-    assert identifier_format('A', 'Ticker') == '.A'
     # 只有region
     assert identifier_format('HK', 'Ticker') == '.HK'
+    # 长度为1
+    assert identifier_format('A', 'Ticker') == '.A'
+    # 长度为2
+    assert identifier_format('12', 'Ticker') == '.12'
