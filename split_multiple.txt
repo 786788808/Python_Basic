@@ -1,14 +1,35 @@
-@patch('logging.error')
-@patch('sys.exit')
-@patch('requests.get')
-def test_web_crawler_fail(mock_requests_get, mock_sys_exit, mock_logging_error):
-    # else分支，status_code != 200
-    mock_response = Mock()
-    mock_response.status_code = 404
-    mock_requests_get.return_value = mock_response
+# 获取当前测试文件所在目录
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 拼出 xml 文件的绝对路径
+xml_path = os.path.join(current_dir, 'app', 'mock_data', 'Webs_US_Sanction.xml')
 
-    config = DummyConfig()
-    web_crawler(config)
+import os
+import pandas as pd
+from Webs_US_Sanction import parse_file
 
-    mock_logging_error.assert_called_once()
-    mock_sys_exit.assert_called_once_with(-1)
+class DummyConfig:
+    def __init__(self, xml_path, csv_path):
+        self.file_path = xml_path
+        self.csv_path = csv_path
+
+def test_parse_file_with_real_sample():
+    # 获取当前测试文件目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 拼接 xml 路径
+    xml_path = os.path.join(current_dir, 'app', 'mock_data', 'Webs_US_Sanction.xml')
+    # 生成一个临时 csv 路径
+    csv_path = os.path.join(current_dir, 'app', 'mock_data', 'Webs_US_Sanction_test_output.csv')
+
+    config = DummyConfig(xml_path, csv_path)
+    parse_file(config)
+
+    # 检查 csv 是否生成
+    assert os.path.exists(csv_path)
+    # 检查内容
+    df = pd.read_csv(csv_path)
+    assert 'EntityName' in df.columns
+    assert 'SanctionProgram' in df.columns
+    # 你可以加更多断言，比如行数、某些值等
+
+    # 清理生成的测试文件
+    os.remove(csv_path)
