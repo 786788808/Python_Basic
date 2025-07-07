@@ -7,7 +7,7 @@ def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
     mock_exists.return_value = True
     
     # 准备 mock 数据
-    mock_env_data = json.dumps(MOCK_ENV_CONFIG).encode('utf-8')  # 转换成 bytes
+    mock_env_data = json.dumps(MOCK_ENV_CONFIG)  # 不要转换成 bytes
     xml_content = b"<xml>test</xml>"
     
     # Mock 请求响应
@@ -30,15 +30,10 @@ def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
             pass
     
     # 设置不同文件的返回内容
-    mock_files = {
-        'env.json': MockFile(mock_env_data),
-        'xml': MockFile(b'')
-    }
-    
     def mock_open_func(*args, **kwargs):
         if 'env.json' in str(args[0]):
-            return mock_files['env.json']
-        return mock_files['xml']
+            return MockFile(mock_env_data)  # 返回字符串格式的 JSON
+        return MockFile('')  # 其他文件返回空字符串
     
     mock_open.side_effect = mock_open_func
 
