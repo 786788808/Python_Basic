@@ -1,104 +1,183 @@
 import unittest
-from datetime import datetime, timedelta
-from your_module import define_data_start_end_date  # 替换为实际模块名
+import os
+import shutil
+import tempfile
+import json
+from datetime import datetime
+from unittest.mock import patch, MagicMock
+from config import HKExSuspConfig  # 假设重构后的类保存在config.py中
 
-class TestDateRangeFunction(unittest.TestCase):
-    
-    def test_daily_loading_normal_month(self):
-        """测试daily模式 - 普通月份"""
-        result = define_data_start_end_date('daily', '20230115')
-        expected = [['20230101', '20230131']]
-        self.assertEqual(result, expected)
-    
-    def test_daily_loading_february_non_leap(self):
-        """测试daily模式 - 非闰年二月"""
-        result = define_data_start_end_date('daily', '20230215')
-        expected = [['20230201', '20230228']]
-        self.assertEqual(result, expected)
-    
-    def test_daily_loading_february_leap(self):
-        """测试daily模式 - 闰年二月"""
-        result = define_data_start_end_date('daily', '20240215')
-        expected = [['20240201', '20240229']]
-        self.assertEqual(result, expected)
-    
-    def test_daily_loading_december(self):
-        """测试daily模式 - 十二月"""
-        result = define_data_start_end_date('daily', '20231215')
-        expected = [['20231201', '20231231']]
-        self.assertEqual(result, expected)
-    
-    def test_initial_load_single_month(self):
-        """测试initial_load模式 - 单个月份"""
-        result = define_data_start_end_date('initial_load', '19990415')
-        expected = [['19990401', '19990430']]
-        self.assertEqual(result, expected)
-    
-    def test_initial_load_multiple_months(self):
-        """测试initial_load模式 - 多个月份"""
-        result = define_data_start_end_date('initial_load', '19990615')
-        expected = [
-            ['19990401', '19990430'],
-            ['19990501', '19990531'],
-            ['19990601', '19990630']
-        ]
-        self.assertEqual(result, expected)
-    
-    def test_initial_load_cross_years(self):
-        """测试initial_load模式 - 跨年度"""
-        result = define_data_start_end_date('initial_load', '20000115')
-        expected = [
-            ['19990401', '19990430'],
-            ['19990501', '19990531'],
-            ['19990601', '19990630'],
-            ['19990701', '19990731'],
-            ['19990801', '19990831'],
-            ['19990901', '19990930'],
-            ['19991001', '19991031'],
-            ['19991101', '19991130'],
-            ['19991201', '19991231'],
-            ['20000101', '20000131']
-        ]
-        self.assertEqual(result, expected)
-    
-    def test_initial_load_date_before_start(self):
-        """测试initial_load模式 - 日期早于起始日期"""
-        result = define_data_start_end_date('initial_load', '19990301')
-        self.assertEqual(result, [])
-    
-    def test_invalid_loading_type(self):
-        """测试无效加载类型"""
-        with self.assertRaises(ValueError) as context:
-            define_data_start_end_date('invalid_type', '20230101')
-        self.assertIn("Invalid loading_type", str(context.exception))
-    
-    def test_date_format_edge_cases(self):
-        """测试日期格式边界情况"""
-        # 月初第一天
-        result = define_data_start_end_date('daily', '20230101')
-        self.assertEqual(result, [['20230101', '20230131']])
+class TestHKExSuspConfig(unittest.TestCase):
+    def setUp(self):
+        # 创建临时目录
+        self.test_dir = tempfile.mkdtemp()
         
-        # 月末最后一天
-        result = define_data_start_end_date('daily', '20230131')
-        self.assertEqual(result, [['20230101', '20230131']])
+        # 创建模拟配置文件
+        self.create_mock_config_files()
         
-        # 闰年测试
-        result = define_data_start_end_date('daily', '20200229')
-        self.assertEqual(result, [['20200201', '20200229']])
+        # 固定日期参数
+        self.gcp_env = "test_env"
+        self.order_date = "20230701"
+        self.from_date = "20230601"
+        self.to_date = "20230630"
     
-    def test_initial_load_large_range(self):
-        """测试initial_load模式 - 大范围日期"""
-        start_date = datetime(1999, 4, 1)
-        end_date = datetime(2023, 1, 15)
-        months_diff = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1
+    def tearDown(self):
+        # 清理临时目录
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+    
+    def create_mock_config_files(self):
+        """创建模拟的JSON配置文件"""
+        # env.json
+        env_data = {
+            "test_env": {
+                "proxy": "https://proxy.example.com"
+            }
+        }
+        with open(os.path.join(self.test_dir, 'env.json'), 'w') as f:
+            json.dump(env_data, f)
         
-        result = define_data_start_end_date('initial_load', '20230115')
-        self.assertEqual(len(result), months_diff)
+        # webS_HKExSuspension.json
+        param_data = {
+            "file_dir": "/data/files",
+            "file_url": "https://api.example.com/data",
+            "log_dir": "/var/logs"
+        }
+        with open(os.path.join(self.test_dir, 'webS_HKExSuspension.json'), 'w') as f:
+            json.dump(param_data, f)
+    
+    @patch('config.datetime')
+    @patch('config.requests.packages.urllib3.disable_warnings')
+    @patch('config.ssl._create_default_https_context')
+    def test_config_initialization(self, mock_ssl, mock_disable_warnings, mock_datetime):
+        """测试配置初始化"""
+        # 模拟当前时间
+        mock_now = datetime(2023, 6, 15, 12, 30, 45)
+        mock_datetime.now.return_value = mock_now
+        mock_datetime.strptime.side_effect = lambda *args, **kw: datetime.strptime(*args, **kw)
         
-        # 验证第一个区间
-        self.assertEqual(result[0], ['19990401', '19990430'])
-        # 验证最后一个区间
-        self.assertEqual(result[-1], ['20230101', '20230131'])
+        # 在临时目录中运行
+        with patch('config.os.getcwd', return_value=self.test_dir):
+            config = HKExSuspConfig(
+                self.gcp_env,
+                self.order_date,
+                self.from_date,
+                self.to_date
+            )
+        
+        # 验证基本属性
+        self.assertEqual(config.file_date, "20230601")
+        self.assertEqual(config.document_type, ["Trading Halt", "Suspension", "Resumption"])
+        self.assertEqual(config.txcode, ["1966", "7368", "2165"])
+        self.assertEqual(config.susp_status_list, ["7", "5", "4"])
+        self.assertEqual(config.proxies, {"https": "https://proxy.example.com"})
+        self.assertEqual(config.url_prefix, "https://api.example.com/data")
+        
+        # 验证文件路径
+        expected_dir = os.path.join(
+            "/data/files",
+            "20230701",
+            "20230601_123045"
+        )
+        self.assertEqual(config.file_dir_date, expected_dir)
+        
+        # 验证文件名
+        self.assertEqual(config.html_filename, [
+            "tradingHalt_20230601.html",
+            "Suspension_20230601.html",
+            "Resumption_20230601.html"
+        ])
+        self.assertEqual(config.csv_filename, [
+            "tradingHalt_20230601.csv",
+            "Suspension_20230601.csv",
+            "Resumption_20230601.csv"
+        ])
+        
+        # 验证完整路径
+        for i, filename in enumerate(config.html_filename):
+            expected_path = os.path.join(expected_dir, filename)
+            self.assertEqual(config.html_paths[i], expected_path)
+        
+        for i, filename in enumerate(config.csv_filename):
+            expected_path = os.path.join(expected_dir, filename)
+            self.assertEqual(config.csv_paths[i], expected_path)
+        
+        # 验证请求头
+        self.assertIn('User-Agent', config.headers)
+        self.assertIn('Mozilla', config.headers['User-Agent'])
+    
+    @patch('config.os.makedirs')
+    def test_directory_creation(self, mock_makedirs):
+        """测试目录创建逻辑"""
+        with patch('config.os.getcwd', return_value=self.test_dir):
+            config = HKExSuspConfig(
+                self.gcp_env,
+                self.order_date,
+                self.from_date,
+                self.to_date
+            )
+        
+        mock_makedirs.assert_called_once_with(config.file_dir_date, exist_ok=True)
+    
+    @patch('config.logging.basicConfig')
+    def test_logging_setup(self, mock_basic_config):
+        """测试日志配置"""
+        with patch('config.os.getcwd', return_value=self.test_dir):
+            config = HKExSuspConfig(
+                self.gcp_env,
+                self.order_date,
+                self.from_date,
+                self.to_date
+            )
+        
+        mock_basic_config.assert_called_once()
+        args, kwargs = mock_basic_config.call_args
+        self.assertEqual(kwargs['level'], logging.INFO)
+        self.assertIn('HKExSuspension.log', kwargs['filename'])
+        self.assertEqual(kwargs['format'], '%(asctime)s - %(levelname)s - %(message)s')
+    
+    @patch('config.os.getcwd', return_value=tempfile.mkdtemp())
+    def test_missing_config_files(self, mock_getcwd):
+        """测试缺少配置文件时的行为"""
+        # 删除配置文件以模拟缺失情况
+        os.remove(os.path.join(mock_getcwd.return_value, 'env.json'))
+        os.remove(os.path.join(mock_getcwd.return_value, 'webS_HKExSuspension.json'))
+        
+        with self.assertLogs(level='ERROR') as log_context:
+            config = HKExSuspConfig(
+                self.gcp_env,
+                self.order_date,
+                self.from_date,
+                self.to_date
+            )
+        
+        # 验证默认值
+        self.assertEqual(config.proxies, {})
+        self.assertEqual(config.url_prefix, '')
+        
+        # 验证错误日志
+        self.assertIn("Configuration initialized successfully", log_context.output[-1])
+    
+    @patch('config.os.getcwd', return_value=tempfile.mkdtemp())
+    def test_no_proxy_configuration(self, mock_getcwd):
+        """测试无代理配置的情况"""
+        # 创建没有代理配置的env.json
+        env_data = {"test_env": {}}
+        with open(os.path.join(mock_getcwd.return_value, 'env.json'), 'w') as f:
+            json.dump(env_data, f)
+        
+        # 创建基础参数文件
+        param_data = {"file_dir": "/data"}
+        with open(os.path.join(mock_getcwd.return_value, 'webS_HKExSuspension.json'), 'w') as f:
+            json.dump(param_data, f)
+        
+        config = HKExSuspConfig(
+            self.gcp_env,
+            self.order_date,
+            self.from_date,
+            self.to_date
+        )
+        
+        self.assertEqual(config.proxies, {})
 
 if __name__ == '__main__':
     unittest.main()
