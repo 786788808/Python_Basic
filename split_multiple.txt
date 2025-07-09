@@ -1,1 +1,104 @@
+import unittest
+from datetime import datetime, timedelta
+from your_module import define_data_start_end_date  # 替换为实际模块名
 
+class TestDateRangeFunction(unittest.TestCase):
+    
+    def test_daily_loading_normal_month(self):
+        """测试daily模式 - 普通月份"""
+        result = define_data_start_end_date('daily', '20230115')
+        expected = [['20230101', '20230131']]
+        self.assertEqual(result, expected)
+    
+    def test_daily_loading_february_non_leap(self):
+        """测试daily模式 - 非闰年二月"""
+        result = define_data_start_end_date('daily', '20230215')
+        expected = [['20230201', '20230228']]
+        self.assertEqual(result, expected)
+    
+    def test_daily_loading_february_leap(self):
+        """测试daily模式 - 闰年二月"""
+        result = define_data_start_end_date('daily', '20240215')
+        expected = [['20240201', '20240229']]
+        self.assertEqual(result, expected)
+    
+    def test_daily_loading_december(self):
+        """测试daily模式 - 十二月"""
+        result = define_data_start_end_date('daily', '20231215')
+        expected = [['20231201', '20231231']]
+        self.assertEqual(result, expected)
+    
+    def test_initial_load_single_month(self):
+        """测试initial_load模式 - 单个月份"""
+        result = define_data_start_end_date('initial_load', '19990415')
+        expected = [['19990401', '19990430']]
+        self.assertEqual(result, expected)
+    
+    def test_initial_load_multiple_months(self):
+        """测试initial_load模式 - 多个月份"""
+        result = define_data_start_end_date('initial_load', '19990615')
+        expected = [
+            ['19990401', '19990430'],
+            ['19990501', '19990531'],
+            ['19990601', '19990630']
+        ]
+        self.assertEqual(result, expected)
+    
+    def test_initial_load_cross_years(self):
+        """测试initial_load模式 - 跨年度"""
+        result = define_data_start_end_date('initial_load', '20000115')
+        expected = [
+            ['19990401', '19990430'],
+            ['19990501', '19990531'],
+            ['19990601', '19990630'],
+            ['19990701', '19990731'],
+            ['19990801', '19990831'],
+            ['19990901', '19990930'],
+            ['19991001', '19991031'],
+            ['19991101', '19991130'],
+            ['19991201', '19991231'],
+            ['20000101', '20000131']
+        ]
+        self.assertEqual(result, expected)
+    
+    def test_initial_load_date_before_start(self):
+        """测试initial_load模式 - 日期早于起始日期"""
+        result = define_data_start_end_date('initial_load', '19990301')
+        self.assertEqual(result, [])
+    
+    def test_invalid_loading_type(self):
+        """测试无效加载类型"""
+        with self.assertRaises(ValueError) as context:
+            define_data_start_end_date('invalid_type', '20230101')
+        self.assertIn("Invalid loading_type", str(context.exception))
+    
+    def test_date_format_edge_cases(self):
+        """测试日期格式边界情况"""
+        # 月初第一天
+        result = define_data_start_end_date('daily', '20230101')
+        self.assertEqual(result, [['20230101', '20230131']])
+        
+        # 月末最后一天
+        result = define_data_start_end_date('daily', '20230131')
+        self.assertEqual(result, [['20230101', '20230131']])
+        
+        # 闰年测试
+        result = define_data_start_end_date('daily', '20200229')
+        self.assertEqual(result, [['20200201', '20200229']])
+    
+    def test_initial_load_large_range(self):
+        """测试initial_load模式 - 大范围日期"""
+        start_date = datetime(1999, 4, 1)
+        end_date = datetime(2023, 1, 15)
+        months_diff = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1
+        
+        result = define_data_start_end_date('initial_load', '20230115')
+        self.assertEqual(len(result), months_diff)
+        
+        # 验证第一个区间
+        self.assertEqual(result[0], ['19990401', '19990430'])
+        # 验证最后一个区间
+        self.assertEqual(result[-1], ['20230101', '20230131'])
+
+if __name__ == '__main__':
+    unittest.main()
