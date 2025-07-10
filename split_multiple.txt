@@ -1,1 +1,136 @@
+import pytest
+from unittest.mock import Mock, patch, mock_open
+import pandas as pd
+import json
+import os
+from datetime import datetime
+from WebS_HKExSuspension import HKExSuspConfig, web_crawler, parse_file, define_data_start_end_date, split_multiple_stock_stockname
 
+# Mock env.json 内容
+MOCK_ENV_CONFIG = {
+    "gcp_env": {
+        "proxy": {"http": "http://", "https": "http://"}
+    }
+}
+
+# Mock WebS_HKExSuspension.json 内容
+MOCK_SUSPENSION_CONFIG = {
+    "file_dir": "tests/test_dags/app/mock_data/HKEx_Suspension",
+    "log_dir": "tests/test_dags/app/mock_data/HKEx_Suspension/logs",
+    "file_url": "https://www1.hkexnews.hk/search/titlesearch.xhtml?lang=en"
+}
+
+# 1. 测试日期处理函数
+def test_define_data_start_end_date():
+    # 测试 daily 模式
+    test_date = "20250701"
+    dates = define_data_start_end_date("daily", test_date)
+    assert len(dates) == 1
+    start_date, end_date = dates[0]
+    assert start_date == datetime.strptime(test_date, "%Y%m%d").strftime("%Y%m%d")
+    
+    # 测试 initial_load 模式
+    dates = define_data_start_end_date("initial_load", test_date)
+    assert len(dates) > 0
+    for start_date, end_date in dates:
+        assert isinstance(start_date, str)
+        assert isinstance(end_date, str)
+
+# 2. 配置加载测试
+@patch('builtins.open')
+def test_hkex_susp_config(mock_open):
+    # 准备mock数据
+    mock_env_data = json.dumps(MOCK_ENV_CONFIG)
+    mock_config_data = json.dumps(MOCK_SUSPENSION_CONFIG)
+    
+    # 设置不同文件的返回内容
+    mock_open.side_effect = lambda file, *args, **kwargs: (
+        mock_open(read_data=mock_env_data).return_value if 'env.json' in str(file)
+        else mock_open(read_data=mock_config_data).return_value if 'WebS_HKExSuspension.json' in str(file)
+        else mock_open().return_value
+    )
+
+    config = HKExSuspConfig('dev', '20250701', '20250701', '20250701')
+    assert config.file_dir_date.endswith('20250701')
+    assert isinstance(config.proxies, dict)
+    assert len(config.document_types) == 3
+    assert len(config.t2codes) == 2
+    assert len(config.susp_status_list) == 3
+
+# 3. 网页爬取测试
+@patch('builtins.open')
+@patch('requests.get')
+@patch('os.path.exists')
+@patch('os.makedirs')
+def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
+    # Mock os.path.exists 返回 True
+    mock_exists.return_value = True
+    
+    # Mock HTML 响应
+    mock_response = Mock()
+    mock_response.status_code = 200
+    with open('tests/test_dags/app/mock_data/HKEx_Suspension/TradingHalt_20250701.html', 'rb') as f:
+        mock_response.text = f.read()
+    mock_get.return_value = mock_response
+    
+    # 准备mock数据
+    mock_env_data = json.dumps(MOCK_ENV_CONFIG)
+    mock_config_data = json.dumps(MOCK_SUSPENSION_CONFIG)
+    
+    # 设置不同文件的返回内容
+    mock_open.side_effect = lambda file, *args, **kwargs: (
+        mock_open(read_data=mock_env_data).return_value if 'env.json' in str(file)
+        else mock_open(read_data=mock_config_data).return_value if 'WebS_HKExSuspension.json' in str(file)
+        else mock_open().return_value
+    )
+
+    config = HKExSuspConfig('dev', '20250701', '20250701', '20250701')
+    result = web_crawler(config, '20250701', '20250701')
+    assert result is True
+
+# 4. 文件解析测试
+@patch('builtins.open')
+def test_parse_file(mock_open):
+    # 准备mock数据
+    mock_env_data = json.dumps(MOCK_ENV_CONFIG)
+    mock_config_data = json.dumps(MOCK_SUSPENSION_CONFIG)
+    
+    # 读取实际的HTML文件内容
+    with open('tests/test_dags/app/mock_data/HKEx_Suspension/TradingHalt_20250701.html', 'r', encoding='utf-8') as f:
+        html_content = f.read()
+    
+    # 设置不同文件的返回内容
+    mock_open.side_effect = lambda file, *args, **kwargs: (
+        mock_open(read_data=mock_env_data).return_value if 'env.json' in str(file)
+        else mock_open(read_data=mock_config_data).return_value if 'WebS_HKExSuspension.json' in str(file)
+        else mock_open(read_data=html_content).return_value if '.html' in str(file)
+        else mock_open().return_value
+    )
+
+    config = HKExSuspConfig('dev', '20250701', '20250701', '20250701')
+    parse_file(config, '20250701', '20250701')
+    
+    # 验证CSV文件生成
+    csv_path = os.path.join(config.file_dir_date, 'TradingHalt_20250701.csv')
+    assert os.path.exists(csv_path)
+    df = pd.read_csv(csv_path)
+    assert 'stock_code' in df.columns
+    assert 'short_stock_name' in df.columns
+    assert len(df) > 0
+
+# 5. 股票代码和名称拆分测试
+def test_split_multiple_stock_stockname():
+    # 创建测试数据
+    test_data = {
+        'stock_code': ['1234+5678', '9999', '1111+2222+3333'],
+        'short_stock_name': ['CompA+CompB', 'CompC', 'CompD+CompE+CompF']
+    }
+    df = pd.DataFrame(test_data)
+    
+    # 测试拆分功能
+    result_df = split_multiple_stock_stockname(df)
+    
+    # 验证结果
+    assert len(result_df) > len(df)  # 拆分后的行数应该更多
+    assert all('+' not in str(code) for code in result_df['stock_code'])  # 确保没有包含 '+' 的代码
+    assert all('+' not in str(name) for name in result_df['short_stock_name'])  # 确保没有包含 '+' 的名称 
