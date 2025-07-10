@@ -1,4 +1,3 @@
-
 import pytest
 from unittest.mock import Mock, patch, mock_open
 import pandas as pd
@@ -39,23 +38,24 @@ def test_define_data_start_end_date():
 
 # 2. 配置加载测试
 @patch('builtins.open')
-def test_hkex_susp_config(mock_open):
+def test_hkex_susp_config(mock_open_func):
     # 准备mock数据
     mock_env_data = json.dumps(MOCK_ENV_CONFIG)
     mock_config_data = json.dumps(MOCK_SUSPENSION_CONFIG)
     
-    # 创建mock文件对象
-    mock_env = mock_open(read_data=mock_env_data)
-    mock_config = mock_open(read_data=mock_config_data)
+    # 设置不同文件的mock返回值
+    mock_files = {
+        'env.json': mock_env_data,
+        'WebS_HKExSuspension.json': mock_config_data
+    }
     
-    def mock_open_func(filename, *args, **kwargs):
-        if 'env.json' in str(filename):
-            return mock_env()
-        elif 'WebS_HKExSuspension.json' in str(filename):
-            return mock_config()
+    def side_effect(filename, *args, **kwargs):
+        for key in mock_files:
+            if key in str(filename):
+                return mock_open(read_data=mock_files[key])()
         return mock_open()()
     
-    mock_open.side_effect = mock_open_func
+    mock_open_func.side_effect = side_effect
 
     config = HKExSuspConfig('dev', '20250701', '20250701', '20250701')
     assert config.file_dir_date.endswith('20250701')
@@ -69,7 +69,7 @@ def test_hkex_susp_config(mock_open):
 @patch('requests.get')
 @patch('os.path.exists')
 @patch('os.makedirs')
-def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
+def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open_func):
     # Mock os.path.exists 返回 True
     mock_exists.return_value = True
     
@@ -84,19 +84,19 @@ def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
     mock_env_data = json.dumps(MOCK_ENV_CONFIG)
     mock_config_data = json.dumps(MOCK_SUSPENSION_CONFIG)
     
-    # 创建mock文件对象
-    mock_env = mock_open(read_data=mock_env_data)
-    mock_config = mock_open(read_data=mock_config_data)
-    mock_write = mock_open()
+    # 设置不同文件的mock返回值
+    mock_files = {
+        'env.json': mock_env_data,
+        'WebS_HKExSuspension.json': mock_config_data
+    }
     
-    def mock_open_func(filename, *args, **kwargs):
-        if 'env.json' in str(filename):
-            return mock_env()
-        elif 'WebS_HKExSuspension.json' in str(filename):
-            return mock_config()
-        return mock_write()
+    def side_effect(filename, *args, **kwargs):
+        for key in mock_files:
+            if key in str(filename):
+                return mock_open(read_data=mock_files[key])()
+        return mock_open()()
     
-    mock_open.side_effect = mock_open_func
+    mock_open_func.side_effect = side_effect
 
     config = HKExSuspConfig('dev', '20250701', '20250701', '20250701')
     result = web_crawler(config, '20250701', '20250701')
@@ -104,7 +104,7 @@ def test_web_crawler(mock_makedirs, mock_exists, mock_get, mock_open):
 
 # 4. 文件解析测试
 @patch('builtins.open')
-def test_parse_file(mock_open):
+def test_parse_file(mock_open_func):
     # 准备mock数据
     mock_env_data = json.dumps(MOCK_ENV_CONFIG)
     mock_config_data = json.dumps(MOCK_SUSPENSION_CONFIG)
@@ -113,22 +113,20 @@ def test_parse_file(mock_open):
     with open('tests/test_dags/app/mock_data/HKEx_Suspension/TradingHalt_20250701.html', 'r', encoding='utf-8') as f:
         html_content = f.read()
     
-    # 创建mock文件对象
-    mock_env = mock_open(read_data=mock_env_data)
-    mock_config = mock_open(read_data=mock_config_data)
-    mock_html = mock_open(read_data=html_content)
-    mock_write = mock_open()
+    # 设置不同文件的mock返回值
+    mock_files = {
+        'env.json': mock_env_data,
+        'WebS_HKExSuspension.json': mock_config_data,
+        '.html': html_content
+    }
     
-    def mock_open_func(filename, *args, **kwargs):
-        if 'env.json' in str(filename):
-            return mock_env()
-        elif 'WebS_HKExSuspension.json' in str(filename):
-            return mock_config()
-        elif '.html' in str(filename):
-            return mock_html()
-        return mock_write()
+    def side_effect(filename, *args, **kwargs):
+        for key in mock_files:
+            if key in str(filename):
+                return mock_open(read_data=mock_files[key])()
+        return mock_open()()
     
-    mock_open.side_effect = mock_open_func
+    mock_open_func.side_effect = side_effect
 
     config = HKExSuspConfig('dev', '20250701', '20250701', '20250701')
     parse_file(config, '20250701', '20250701')
