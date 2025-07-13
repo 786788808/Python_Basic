@@ -2,15 +2,18 @@ import os
 import json
 import pandas as pd
 import pytest
-from webs.webs_hkex import parse_file, HKExSuspConfig
+import sys
+from dags.app.WebS_HKExSuspension import parse_file, HKExSuspConfig
 
 def test_parse_file():
     """测试parse_file函数"""
-    # 获取当前测试文件的绝对路径
+    # 获取测试文件的目录结构
     current_dir = os.path.dirname(os.path.abspath(__file__))
+    mock_data_dir = os.path.join(current_dir, "mock_data")
+    dags_app_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))), "dags", "app")
     
     # 读取环境配置
-    with open(os.path.join(current_dir, "test_data", "test_env.json"), 'r', encoding='utf-8') as f:
+    with open(os.path.join(dags_app_dir, "env.json"), 'r', encoding='utf-8') as f:
         env = json.load(f)
     
     # 实例化HKExSuspConfig
@@ -21,24 +24,26 @@ def test_parse_file():
         to_date='20250701'
     )
     
-    # 将实例的属性转换为字典
+    # 将实例的属性转换为字典，并修改路径指向mock数据
     config = {
-        'html_filenames': hkex_config.html_filenames,
-        'html_paths': hkex_config.html_paths,
-        'csv_paths': hkex_config.csv_paths,
-        'file_dir_date': hkex_config.file_dir_date,
-        'file_date': hkex_config.file_date,
+        'html_filenames': [
+            "TradingHalt_20250701.html",
+            "Suspension_20250701.html",
+            "Resumption_20250701.html"
+        ],
+        'html_paths': [
+            os.path.join(mock_data_dir, "TradingHalt_20250701.html"),
+            os.path.join(mock_data_dir, "Suspension_20250701.html"),
+            os.path.join(mock_data_dir, "Resumption_20250701.html")
+        ],
+        'csv_paths': [os.path.join(mock_data_dir, "output_suspension.csv")],
+        'file_dir_date': mock_data_dir,
+        'file_date': '20250701',
         'susp_status_list': hkex_config.susp_status_list
     }
     
-    # 修改路径为测试目录
-    test_data_dir = os.path.join(current_dir, "test_data")
-    config['html_paths'] = [os.path.join(test_data_dir, f) for f in config['html_filenames']]
-    config['csv_paths'] = [os.path.join(test_data_dir, "output_suspension.csv")]
-    config['file_dir_date'] = test_data_dir
-    
     # 确保输出目录存在
-    os.makedirs(os.path.dirname(config["csv_paths"][0]), exist_ok=True)
+    os.makedirs(mock_data_dir, exist_ok=True)
     
     try:
         # 调用parse_file函数
@@ -81,4 +86,7 @@ def test_parse_file():
             os.remove(config["csv_paths"][0])
 
 if __name__ == "__main__":
-    pytest.main(["-v", __file__]) 
+    # 添加dags目录到Python路径
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    sys.path.append(project_root)
+    pytest.main(["-v", __file__])
