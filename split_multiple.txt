@@ -2,31 +2,40 @@ import os
 import json
 import pandas as pd
 import pytest
-from webs.webs_hkex import parse_file
+from webs.webs_hkex import parse_file, HKExSuspConfig
 
 def test_parse_file():
     """测试parse_file函数"""
     # 获取当前测试文件的绝对路径
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    test_data_dir = os.path.join(current_dir, "test_data")
     
-    # 定义测试配置
+    # 读取环境配置
+    with open(os.path.join(current_dir, "test_data", "test_env.json"), 'r', encoding='utf-8') as f:
+        env = json.load(f)
+    
+    # 实例化HKExSuspConfig
+    hkex_config = HKExSuspConfig(
+        gcp_env='dev',
+        order_date='20250701',
+        from_date='20250701',
+        to_date='20250701'
+    )
+    
+    # 将实例的属性转换为字典
     config = {
-        'csv_paths': [os.path.join(test_data_dir, "output_suspension.csv")],
-        'file_date': '20250701',
-        'file_dir_date': test_data_dir,
-        'html_filenames': [
-            "TradingHalt_20250701.html",
-            "Suspension_20250701.html",
-            "Resumption_20250701.html"
-        ],
-        'html_paths': [
-            os.path.join(test_data_dir, "TradingHalt_20250701.html"),
-            os.path.join(test_data_dir, "Suspension_20250701.html"),
-            os.path.join(test_data_dir, "Resumption_20250701.html")
-        ],
-        'susp_status_list': ['T', 'S', 'R']
+        'html_filenames': hkex_config.html_filenames,
+        'html_paths': hkex_config.html_paths,
+        'csv_paths': hkex_config.csv_paths,
+        'file_dir_date': hkex_config.file_dir_date,
+        'file_date': hkex_config.file_date,
+        'susp_status_list': hkex_config.susp_status_list
     }
+    
+    # 修改路径为测试目录
+    test_data_dir = os.path.join(current_dir, "test_data")
+    config['html_paths'] = [os.path.join(test_data_dir, f) for f in config['html_filenames']]
+    config['csv_paths'] = [os.path.join(test_data_dir, "output_suspension.csv")]
+    config['file_dir_date'] = test_data_dir
     
     # 确保输出目录存在
     os.makedirs(os.path.dirname(config["csv_paths"][0]), exist_ok=True)
