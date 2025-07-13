@@ -1,1 +1,75 @@
+import os
+import json
+import pandas as pd
+import pytest
+from webs.webs_hkex import parse_file
 
+def test_parse_file():
+    """测试parse_file函数"""
+    # 获取当前测试文件的绝对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    test_data_dir = os.path.join(current_dir, "test_data")
+    
+    # 定义测试配置
+    config = {
+        'csv_paths': [os.path.join(test_data_dir, "output_suspension.csv")],
+        'file_date': '20250701',
+        'file_dir_date': test_data_dir,
+        'html_filenames': [
+            "TradingHalt_20250701.html",
+            "Suspension_20250701.html",
+            "Resumption_20250701.html"
+        ],
+        'html_paths': [
+            os.path.join(test_data_dir, "TradingHalt_20250701.html"),
+            os.path.join(test_data_dir, "Suspension_20250701.html"),
+            os.path.join(test_data_dir, "Resumption_20250701.html")
+        ],
+        'susp_status_list': ['T', 'S', 'R']
+    }
+    
+    # 确保输出目录存在
+    os.makedirs(os.path.dirname(config["csv_paths"][0]), exist_ok=True)
+    
+    try:
+        # 调用parse_file函数
+        parse_file(config, "20250701", "20250701")
+        
+        # 验证输出文件是否存在
+        assert os.path.exists(config["csv_paths"][0]), "输出文件未创建"
+        
+        # 读取输出的CSV文件
+        df = pd.read_csv(config["csv_paths"][0], sep='|', encoding='utf-8')
+        
+        # 基本数据验证
+        assert len(df) > 0, "CSV文件不应为空"
+        assert not df.empty, "DataFrame不应为空"
+        
+        # 验证必要的列是否存在
+        required_columns = [
+            "Release_time", "stock_code", "short_stock_name",
+            "Document", "doc_url"
+        ]
+        for col in required_columns:
+            assert col in df.columns, f"缺少必要的列: {col}"
+        
+        # 验证数据类型
+        assert df["stock_code"].dtype == "object", "stock_code应该是字符串类型"
+        assert df["short_stock_name"].dtype == "object", "short_stock_name应该是字符串类型"
+        
+        # 验证股票代码格式
+        assert all(df["stock_code"].str.match(r'^\d{5}$|^\d{4}$') | df["stock_code"].isna()), "股票代码格式不正确"
+        
+        # 验证时间格式
+        assert all(pd.to_datetime(df["Release_time"], format="%Y/%m/%d %H:%M")), "时间格式应为YYYY/MM/DD HH:MM"
+        
+        # 验证URL格式
+        assert all(df["doc_url"].str.startswith("http") | df["doc_url"].isna()), "文档URL格式不正确"
+        
+    finally:
+        # 清理测试文件
+        if os.path.exists(config["csv_paths"][0]):
+            os.remove(config["csv_paths"][0])
+
+if __name__ == "__main__":
+    pytest.main(["-v", __file__]) 
