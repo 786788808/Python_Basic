@@ -1,1 +1,27 @@
+    # 模拟的HTML内容，确保生成的数据使用正确的列名
+    mock_html_content = """
+    <!DOCTYPE html>
+    <html>
+    <body>
+        <table>
+            <tr>
+                <td class="text-right text-end release-time">2025/07/01 09:00</td>
+                <td class="text-right text-end stock-short-code">00001</td>
+                <td class="stock-short-name">长和</td>
+                <td>
+                    <div class="headline">公告</div>
+                    <div class="doc-link"><a href="document.pdf">文件</a></div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
 
+    with patch('builtins.open', mock_open(read_data=mock_html_content)):
+        result = parse_file(config, from_date, to_date)
+        
+        # 验证结果中的列名是否正确
+        assert 'stock_code' in result  # 使用小写的列名
+        assert 'short_stock_name' in result
+        assert len(result['stock_code']) > 0
