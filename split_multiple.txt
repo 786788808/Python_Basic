@@ -1,1 +1,52 @@
 
+import unittest
+from unittest.mock import mock_open, patch
+
+class TestConfig:
+    def __init__(self):
+        self.html_filenames = ['TradingHalt_20250701.html']
+        self.html_paths = ['tests/test_data/TradingHalt_20250701.html']
+        self.csv_paths = ['tests/test_data/output_suspension.csv']
+        self.file_date = '20250701'
+        self.file_dir_date = '20250701'
+        self.susp_status_list = ['Trading Halt']
+
+def test_parse_file():
+    # 使用TestConfig类而不是字典
+    config = TestConfig()
+    from_date = '20250701'
+    to_date = '20250701'
+
+    # 模拟的HTML内容
+    mock_html_content = """
+    <!DOCTYPE html>
+    <html>
+    <head><title>Trading Halt</title></head>
+    <body>
+        <table>
+            <tr>
+                <td class="text-right text-end release-time">2025/07/01 09:00</td>
+                <td class="text-right text-end stock-short-code">00001</td>
+                <td class="stock-short-name">长和</td>
+                <td>
+                    <div class="headline">公告</div>
+                    <div class="doc-link"><a href="document.pdf">文件</a></div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+
+    # 使用mock来模拟文件读取
+    with patch('builtins.open', mock_open(read_data=mock_html_content)):
+        result = parse_file(config, from_date, to_date)
+        
+        # 验证结果
+        assert result is not None
+        assert len(result['release_time']) == 1
+        assert result['release_time'] == ['2025/07/01 09:00']
+        assert result['stock_code'] == ['00001']
+        assert result['short_stock_name'] == ['长和']
+        assert result['document'] == ['公告']
+        assert result['doc_url'] == ['document.pdf']
