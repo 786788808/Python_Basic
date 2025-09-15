@@ -1,2 +1,1 @@
-sys.modules['sftp_executor'] = MagicMock()
-sys.modules['sftp_executor.bigquery'] = MagicMock()
+
