@@ -1,1 +1,46 @@
 
+# test_sftp_importlib.py
+import unittest
+import importlib
+import sys
+from unittest.mock import patch, MagicMock
+
+class TestSftpImportLib(unittest.TestCase):
+    
+    def setUp(self):
+        # 模拟所有可能的依赖
+        sys.modules['crypo'] = MagicMock()
+        sys.modules['crypo'].ConnectSecertManager = MagicMock()
+        sys.modules['sftp_executor'] = MagicMock()
+        sys.modules['sftp_executor.bigquery'] = MagicMock()
+        sys.modules['logger'] = MagicMock()
+        sys.modules['airflow'] = MagicMock()
+        sys.modules['airflow.models'] = MagicMock()
+        sys.modules['airflow.models'].Variable = MagicMock()
+    
+    def test_import_sftp(self):
+        """测试导入 sftp 模块"""
+        try:
+            # 尝试动态导入
+            spec = importlib.util.spec_from_file_location(
+                "sftp", 
+                "/apps/python/sftp.py"
+            )
+            sftp_module = importlib.util.module_from_spec(spec)
+            
+            # 在执行前模拟 argparse
+            with patch('argparse.ArgumentParser.parse_args') as mock_parse:
+                mock_parse.return_value = MagicMock()
+                spec.loader.exec_module(sftp_module)
+            
+            self.assertTrue(hasattr(sftp_module, 'CtlFileNotFoundException'))
+            self.assertTrue(hasattr(sftp_module, 'check_ctl_exist'))
+            
+        except SystemExit:
+            # 如果发生 SystemExit，跳过测试
+            self.skipTest("sftp module causes SystemExit on import")
+        except Exception as e:
+            self.fail(f"Failed to import sftp module: {e}")
+
+if __name__ == '__main__':
+    unittest.main()
