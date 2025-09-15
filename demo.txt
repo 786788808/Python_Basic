@@ -1,1 +1,60 @@
+import unittest
+from unittest.mock import patch, MagicMock
+import sys
+import subprocess
 
+# 在导入 sftp 模块之前，先模拟掉 Airflow 相关的依赖
+sys.modules['airflow'] = MagicMock()
+sys.modules['airflow.models'] = MagicMock()
+
+# 创建一个模拟的 Variable 类
+mock_variable = MagicMock()
+mock_variable.get.return_value = "mock_value"
+sys.modules['airflow.models'].Variable = mock_variable
+
+# 现在可以安全地导入 sftp 模块了
+from sftp import CtlFileNotFoundException, check_ctl_exist
+
+class TestSftp(unittest.TestCase):
+
+    def test_ctl_file_not_found_exception(self):
+        """测试自定义异常能否被正确抛出并包含消息"""
+        test_message = "Test error message"
+        with self.assertRaises(CtlFileNotFoundException) as context:
+            raise CtlFileNotFoundException(test_message)
+
+        self.assertEqual(str(context.exception), test_message)
+
+    @patch('sftp.sftp_con')
+    @patch('sftp.file_date')
+    @patch('subprocess.Popen')
+    def test_check_ctl_exist_success(self, mock_popen, mock_file_date, mock_sftp_con):
+        """测试CTL文件成功找到的情况"""
+        # 设置模拟的全局变量
+        mock_file_date.return_value = '20230915'
+        mock_sftp_con.return_value = '| sftp -oSomeOptions user@host'
+        
+        # 配置Mock Popen实例
+        mock_process = MagicMock()
+        mock_popen.return_value = mock_process
+        # 模拟 communicate() 返回 (stdout, stderr)
+        mock_process.communicate.return_value = (
+            b'-rw-r--r-- 1 user group 123 Sep 14 08:00 ready_20230914.ctl',
+            b''
+        )
+        mock_process.returncode = 0
+
+        # 执行函数
+        result = check_ctl_exist()
+
+        # 断言
+        self.assertTrue(result)  # 应返回 True
+        # 断言 Popen 被调用了一次，并且参数正确
+        mock_popen.assert_called_once()
+        call_args, call_kwargs = mock_popen.call_args
+        self.assertIn('echo \'ls -l /srv/ftp/inf_to_hsil/ready_20230914.ctl\'', call_args[0])
+        self.assertEqual(call_kwargs['shell'], True)
+        self.assertEqual(call_kwargs['stdout'], subprocess.PIPE)
+        self.assertEqual(call_kwargs['stderr'], subprocess.PIPE)
+
+    # 其他测试方法保持不变...
