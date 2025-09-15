@@ -1,1 +1,11 @@
 
+# 尝试导入 sftp，如果失败则跳过所有测试
+try:
+    from sftp import CtlFileNotFoundException, check_ctl_exist
+except ImportError as e:
+    if "crypo" in str(e):
+        # 如果是因为 crypo 模块缺失，跳过所有测试
+        import pytest
+        pytest.skip("跳过测试：缺少 crypo 模块依赖", allow_module_level=True)
+    else:
+        raise
