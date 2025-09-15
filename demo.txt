@@ -1,145 +1,125 @@
-import os
+import unittest
+from unittest.mock import patch, MagicMock
 import sys
-from datetime import datetime
-import requests
-from lxml import etree
-import logging
-import csv
-from collections import defaultdict
+import subprocess
+from datetime import datetime, timedelta
 
+# 导入需要测试的模块
+sys.path.append('..')
+from sftp import CtlFileNotFoundException, check_ctl_exist
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(f'D:\\Coding\\Code\\pj_learn_001\\Log\\sanctionslist\\sanctions_parser_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log'),
-        logging.StreamHandler()
-    ]
-)
+class TestSftp(unittest.TestCase):
 
-def web_crawler():
-    """
-    Function to download the OFAC sanctions list from the US Treasury website.
-    """
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-    }
-    url = 'https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/CONS_ENHANCED.XML'
-    res = requests.get(url=url, headers=headers)
-    if res.status_code == 200:
-        with open(file_path, 'wb') as f:
-            f.write(res.content)
-        print("Download successful.")
-    else:
-        print("Failed to download the sanctions list.")
-    print(res.status_code)
+    def test_ctl_file_not_found_exception(self):
+        """测试自定义异常能否被正确抛出并包含消息"""
+        test_message = "Test error message"
+        with self.assertRaises(CtlFileNotFoundException) as context:
+            raise CtlFileNotFoundException(test_message)
 
+        self.assertEqual(str(context.exception), test_message)
 
-def parse_xml_to_csv(xml_file, output_csv):
-    # 解析XML文档
-    tree = etree.parse(xml_file)
-    root = tree.getroot()
+    @patch('sftp.sftp_con')
+    @patch('sftp.file_date')
+    @patch('subprocess.Popen')
+    def test_check_ctl_exist_success(self, mock_popen, mock_file_date, mock_sftp_con):
+        """测试CTL文件成功找到的情况"""
+        # 设置模拟的全局变量
+        mock_file_date.return_value = '20230915'
+        mock_sftp_con.return_value = '| sftp -oSomeOptions user@host'
+        
+        # 配置Mock Popen实例
+        mock_process = MagicMock()
+        mock_popen.return_value = mock_process
+        # 模拟 communicate() 返回 (stdout, stderr)
+        mock_process.communicate.return_value = (
+            b'-rw-r--r-- 1 user group 123 Sep 14 08:00 ready_20230914.ctl',
+            b''
+        )
+        mock_process.returncode = 0
 
-    # 准备CSV文件
-    with open(output_csv, 'w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(['No', 'depth', 'depth_sub', 'type', 'elementPath'])
+        # 执行函数
+        result = check_ctl_exist()
 
-        # 初始化数据结构
-        unique_paths = set()
-        row_counter = 1
-        depth_counters = defaultdict(int)
+        # 断言
+        self.assertTrue(result)  # 应返回 True
+        # 断言 Popen 被调用了一次，并且参数正确
+        mock_popen.assert_called_once()
+        call_args, call_kwargs = mock_popen.call_args
+        self.assertIn('echo \'ls -l /srv/ftp/inf_to_hsil/ready_20230914.ctl\'', call_args[0])
+        self.assertEqual(call_kwargs['shell'], True)
+        self.assertEqual(call_kwargs['stdout'], subprocess.PIPE)
+        self.assertEqual(call_kwargs['stderr'], subprocess.PIPE)
 
-        # 获取命名空间映射
-        nsmap = root.nsmap
+    @patch('sftp.sftp_con')
+    @patch('sftp.file_date')
+    @patch('subprocess.Popen')
+    def test_check_ctl_exist_not_found_via_stderr(self, mock_popen, mock_file_date, mock_sftp_con):
+        """测试CTL文件未找到的情况（通过stderr信息判断）"""
+        # 设置模拟的全局变量
+        mock_file_date.return_value = '20230915'
+        mock_sftp_con.return_value = '| sftp -oSomeOptions user@host'
+        
+        # 配置Mock Popen实例
+        mock_process = MagicMock()
+        mock_popen.return_value = mock_process
+        # 模拟 communicate() 返回 (stdout, stderr)
+        mock_process.communicate.return_value = (
+            b'',  # stdout 为空
+            b"Can't ls: No such file or directory"  # stderr 包含特定错误
+        )
+        mock_process.returncode = 1
 
-        # 递归遍历函数
-        def traverse_node(node, depth, current_path):
-            nonlocal row_counter
+        # 断言函数抛出了我们自定义的异常
+        with self.assertRaises(CtlFileNotFoundException):
+            check_ctl_exist()
 
-            # 获取元素本地名称（不带命名空间）
-            elem_name = etree.QName(node).localname
+        mock_popen.assert_called_once()
 
-            # 创建当前元素的路径
-            elem_path = f"{current_path}/{elem_name}" if current_path else elem_name
+    @patch('sftp.sftp_con')
+    @patch('sftp.file_date')
+    @patch('subprocess.Popen')
+    def test_check_ctl_exist_subprocess_error(self, mock_popen, mock_file_date, mock_sftp_con):
+        """测试subprocess.Popen调用本身出现异常（非文件未找到）"""
+        # 设置模拟的全局变量
+        mock_file_date.return_value = '20230915'
+        mock_sftp_con.return_value = '| sftp -oSomeOptions user@host'
+        
+        # 配置Mock Popen直接抛出异常，例如OSError
+        mock_popen.side_effect = OSError("Failed to execute command")
 
-            # 处理元素节点 (Tag)
-            if elem_path not in unique_paths:
-                # 更新深度子计数器
-                depth_counters[depth] += 1
-                current_depth_sub = f"{depth_counters[depth]}"
+        # 断言原始异常被传播
+        with self.assertRaises(OSError):
+            check_ctl_exist()
 
-                writer.writerow([row_counter, depth, current_depth_sub, "Tag", elem_path])
-                row_counter += 1
-                unique_paths.add(elem_path)
+        mock_popen.assert_called_once()
 
-                # 初始化当前元素的属性计数器
-                attr_counter = 0
+    @patch('sftp.sftp_con')
+    @patch('sftp.file_date')
+    @patch('subprocess.Popen')
+    def test_check_ctl_exist_with_different_date_formats(self, mock_popen, mock_file_date, mock_sftp_con):
+        """测试不同日期格式的处理"""
+        # 设置模拟的全局变量
+        mock_file_date.return_value = '20231201'
+        mock_sftp_con.return_value = '| sftp -oSomeOptions user@host'
+        
+        # 配置Mock Popen实例
+        mock_process = MagicMock()
+        mock_popen.return_value = mock_process
+        mock_process.communicate.return_value = (
+            b'-rw-r--r-- 1 user group 123 Nov 30 08:00 ready_20231130.ctl',
+            b''
+        )
+        mock_process.returncode = 0
 
-                # 处理所有属性节点 (Attribute)
-                # 使用items()方法获取所有属性
-                for attr_name, attr_value in node.items():
-                    # 获取属性完整名称
-                    attr_qname = etree.QName(attr_name)
-                    attr_ns = attr_qname.namespace
-                    attr_localname = attr_qname.localname
+        # 执行函数
+        result = check_ctl_exist()
 
-                    # 构建可读属性名
-                    if attr_ns:
-                        # 查找命名空间前缀
-                        prefix = None
-                        for p, uri in nsmap.items():
-                            if uri == attr_ns:
-                                prefix = p
-                                break
-
-                        if prefix:
-                            readable_attr_name = f"{prefix}:{attr_localname}"
-                        else:
-                            readable_attr_name = f"{{{attr_ns}}}{attr_localname}"
-                    else:
-                        readable_attr_name = attr_localname
-
-                    # 创建属性路径
-                    attr_path = f"{elem_path}_{readable_attr_name}"
-
-                    if attr_path not in unique_paths:
-                        attr_counter += 1
-                        attr_depth_sub = f"{current_depth_sub}_{attr_counter}"
-
-                        writer.writerow([row_counter, depth, attr_depth_sub, "Attribute", attr_path])
-                        row_counter += 1
-                        unique_paths.add(attr_path)
-
-            # 递归处理子节点
-            for child in node.iterchildren():
-                traverse_node(child, depth + 1, elem_path)
-
-        # 从根节点开始遍历
-        traverse_node(root, 0, "")
-
-
+        # 断言
+        self.assertTrue(result)
+        mock_popen.assert_called_once()
+        call_args, call_kwargs = mock_popen.call_args
+        # 检查命令中是否包含正确的前一天日期
+        self.assertIn('ready_20231130.ctl', call_args[0])
 
 if __name__ == '__main__':
-    today = datetime.now().strftime('%Y-%m-%d')
-    # current_date = datetime.now().strftime('%Y%m%d')
-    current_date = '20250618'
-    order_date= current_date
-    file_dir = 'D:\\Coding\\Code\\pj_learn_001\\DataFile\\sanctionslist'
-    file_dir_date = f'D:\\Coding\\Code\\pj_learn_001\\DataFile\\sanctionslist\\{order_date}'
-    file_path = f'{file_dir_date}\\us_sanctions_list.xml'
-    csv_path = f'{file_dir_date}\\us_sanctions_list.csv'
-    os.makedirs(file_dir_date, exist_ok=True)
-    logging.info(f"11111111111111")
-    # web_crawler()
-    logging.info(f"222222222222222")
-    # parse_xml(file_path)
-
-    logging.info(f"333333333333333333")
-
-    parse_xml_to_csv(file_path, csv_path)
-    logging.info(f"666666666")
-
-
-
+    unittest.main()
