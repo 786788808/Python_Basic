@@ -1,1 +1,124 @@
+# tests/test_sftp.py
+import os
+import sys
+import unittest
+from unittest.mock import patch, MagicMock
 
+# 添加根目录到 Python 路径
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# 模拟 airflow 和 crypto 模块
+sys.modules['airflow'] = MagicMock()
+sys.modules['cryptography'] = MagicMock()
+
+class TestSftp(unittest.TestCase):
+    def setUp(self):
+        # 导入要测试的模块
+        from sftp import check_ctl_exit, CtlFileNotFoundExecption
+        self.check_ctl_exit = check_ctl_exit
+        self.CtlFileNotFoundExecption = CtlFileNotFoundExecption
+    
+    def test_ctl_file_found(self):
+        """测试找到 .ctl 文件的情况"""
+        with patch('sftp.SSHHook') as mock_ssh_hook:
+            # 模拟 SFTP 客户端返回的文件列表
+            mock_sftp_client = MagicMock()
+            mock_sftp_client.listdir.return_value = ['file1.ctl', 'file2.txt', 'file3.ctl']
+            
+            # 模拟 SSH 连接
+            mock_ssh_client = MagicMock()
+            mock_ssh_client.open_sftp.return_value = mock_sftp_client
+            mock_ssh_hook.return_value.get_conn.return_value.__enter__.return_value = mock_ssh_client
+            
+            # 调用被测函数
+            result = self.check_ctl_exit('/remote/path')
+            self.assertTrue(result)
+    
+    def test_ctl_file_not_found(self):
+        """测试找不到 .ctl 文件的情况"""
+        with patch('sftp.SSHHook') as mock_ssh_hook:
+            # 模拟 SFTP 客户端返回的文件列表（没有 .ctl 文件）
+            mock_sftp_client = MagicMock()
+            mock_sftp_client.listdir.return_value = ['file1.txt', 'file2.csv', 'file3.log']
+            
+            mock_ssh_client = MagicMock()
+            mock_ssh_client.open_sftp.return_value = mock_sftp_client
+            mock_ssh_hook.return_value.get_conn.return_value.__enter__.return_value = mock_ssh_client
+            
+            # 验证是否抛出正确的异常
+            with self.assertRaises(self.CtlFileNotFoundExecption) as context:
+                self.check_ctl_exit('/remote/path')
+            
+            self.assertIn("未找到后缀为.ctl的文件", str(context.exception))
+    
+    def test_custom_suffix(self):
+        """测试使用自定义文件后缀"""
+        with patch('sftp.SSHHook') as mock_ssh_hook:
+            mock_sftp_client = MagicMock()
+            mock_sftp_client.listdir.return_value = ['file1.done', 'file2.txt']
+            
+            mock_ssh_client = MagicMock()
+            mock_ssh_client.open_sftp.return_value = mock_sftp_client
+            mock_ssh_hook.return_value.get_conn.return_value.__enter__.return_value = mock_ssh_client
+            
+            # 使用自定义后缀 .done
+            result = self.check_ctl_exit('/remote/path', suffix='.done')
+            self.assertTrue(result)
+    
+    def test_empty_directory(self):
+        """测试空目录的情况"""
+        with patch('sftp.SSHHook') as mock_ssh_hook:
+            mock_sftp_client = MagicMock()
+            mock_sftp_client.listdir.return_value = []
+            
+            mock_ssh_client = MagicMock()
+            mock_ssh_client.open_sftp.return_value = mock_sftp_client
+            mock_ssh_hook.return_value.get_conn.return_value.__enter__.return_value = mock_ssh_client
+            
+            with self.assertRaises(self.CtlFileNotFoundExecption) as context:
+                self.check_ctl_exit('/remote/path')
+            
+            self.assertIn("未找到后缀为.ctl的文件", str(context.exception))
+    
+    def test_exception_message(self):
+        """测试异常消息内容"""
+        exception = self.CtlFileNotFoundExecption("/test/path")
+        self.assertEqual(str(exception), "在目录/test/path下未找到后缀为.ctl的文件")
+    
+    def test_case_insensitive_suffix(self):
+        """测试大小写不敏感的后缀匹配"""
+        with patch('sftp.SSHHook') as mock_ssh_hook:
+            mock_sftp_client = MagicMock()
+            mock_sftp_client.listdir.return_value = ['FILE1.CTL', 'file2.Ctl', 'file3.ctL']
+            
+            mock_ssh_client = MagicMock()
+            mock_ssh_client.open_sftp.return_value = mock_sftp_client
+            mock_ssh_hook.return_value.get_conn.return_value.__enter__.return_value = mock_ssh_client
+            
+            result = self.check_ctl_exit('/remote/path')
+            self.assertTrue(result)
+    
+    def test_special_characters_in_path(self):
+        """测试路径中包含特殊字符"""
+        with patch('sftp.SSHHook') as mock_ssh_hook:
+            mock_sftp_client = MagicMock()
+            mock_sftp_client.listdir.return_value = ['file.ctl']
+            
+            mock_ssh_client = MagicMock()
+            mock_ssh_client.open_sftp.return_value = mock_sftp_client
+            mock_ssh_hook.return_value.get_conn.return_value.__enter__.return_value = mock_ssh_client
+            
+            # 包含特殊字符的路径
+            path = '/remote/path/with spaces/and!special@chars#'
+            result = self.check_ctl_exit(path)
+            self.assertTrue(result)
+            
+            # 验证异常消息中的路径是否正确
+            with self.assertRaises(self.CtlFileNotFoundExecption) as context:
+                mock_sftp_client.listdir.return_value = []
+                self.check_ctl_exit(path)
+            
+            self.assertIn(path, str(context.exception))
+
+if __name__ == '__main__':
+    unittest.main()
